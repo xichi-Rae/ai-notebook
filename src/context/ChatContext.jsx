@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useReducer } from 'react'
+import { createContext, useContext, useEffect, useReducer, useRef } from 'react'
 import { EXECUTIVE_COACH_SYSTEM_PROMPT } from '../config/systemPrompt'
 import {
   fetchDeepSeekReply,
@@ -6,6 +6,13 @@ import {
 } from '../services/deepseek'
 import { playTaskCompleteSound } from '../utils/sound'
 import { sanitizeAIResponse } from '../utils/sanitizeAIResponse'
+import {
+  generateSummary as requestSummary,
+  getMonthlySummaryData,
+  getWeeklySummaryData,
+  readStoredSummary,
+  saveStoredSummary,
+} from '../services/AISummaryService'
 import { useGame } from './GameContext'
 import { useGoal } from './GoalContext'
 import { useRecord } from './RecordContext'
@@ -16,6 +23,12 @@ const ChatContext = createContext(null)
 const STYLE_LEARNING_KEY = 'executive-coach-style-learning'
 
 let idCounter = 0
+
+function getTodayKey() {
+  const now = new Date()
+  const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
+  return local.toISOString().slice(0, 10)
+}
 
 function createId(prefix = 'msg') {
   idCounter += 1
@@ -94,10 +107,19 @@ function buildApiMessages(messages) {
       role: 'system',
       content: buildSystemPrompt(),
     },
-    ...messages.map((message) => ({
-      role: message.role === 'user' ? 'user' : 'assistant',
-      content: serializeMessageForApi(message),
-    })),
+    ...messages.map((message) => {
+      if (message.type === 'system-notice') {
+        return {
+          role: 'system',
+          content: serializeMessageForApi(message),
+        }
+      }
+
+      return {
+        role: message.role === 'user' ? 'user' : 'assistant',
+        content: serializeMessageForApi(message),
+      }
+    }),
   ]
 }
 
@@ -183,6 +205,9 @@ function reducer(state, action) {
 
 export function ChatProvider({ children }) {
   const [state, dispatch] = useReducer(reducer, initialState)
+  const lastSummaryPromptRef = useRef('')
+  const lastWeeklySummaryPromptRef = useRef('')
+  const lastMonthlySummaryPromptRef = useRef('')
   const game = useGame()
   const goal = useGoal()
   const record = useRecord()
@@ -201,6 +226,99 @@ export function ChatProvider({ children }) {
 
     return () => clearInterval(intervalId)
   }, [state.activeTask?.id, state.activeTask?.status])
+
+  useEffect(() => {
+    function checkEveningSummary() {
+      const now = new Date()
+      if (now.getHours() !== 21 || now.getMinutes() !== 30) {
+        return
+      }
+
+      const today = getTodayKey()
+      if (lastSummaryPromptRef.current === today) {
+        return
+      }
+      if (readStoredSummary('day', today)) {
+        return
+      }
+
+      lastSummaryPromptRef.current = today
+      dispatch({
+        type: 'ADD_SYSTEM_MESSAGES',
+        messages: [
+          {
+            id: createId('sys'),
+            role: 'system',
+            type: 'text',
+            text: '今天快结束了，要现在生成一份今日总结吗？',
+          },
+        ],
+      })
+    }
+
+    checkEveningSummary()
+    const intervalId = setInterval(checkEveningSummary, 60000)
+    return () => clearInterval(intervalId)
+  }, [])
+
+  useEffect(() => {
+    function checkPeriodicSummaryPrompt() {
+      const now = new Date()
+      if (now.getHours() !== 20 || now.getMinutes() !== 0) {
+        return
+      }
+
+      const today = getTodayKey()
+      const weekday = now.getDay()
+      const isSunday = weekday === 0
+      const lastDayOfMonth = new Date(
+        now.getFullYear(),
+        now.getMonth() + 1,
+        0,
+      ).getDate()
+      const isLastDayOfMonth = now.getDate() === lastDayOfMonth
+
+      if (isSunday && lastWeeklySummaryPromptRef.current !== today) {
+        lastWeeklySummaryPromptRef.current = today
+        if (!readStoredSummary('week', today)) {
+          dispatch({
+            type: 'ADD_SYSTEM_MESSAGES',
+            messages: [
+              {
+                id: createId('summary-prompt'),
+                role: 'system',
+                type: 'summary-prompt',
+                summaryType: 'week',
+                text: '📊 这周结束了，要看看本周总结吗？',
+              },
+            ],
+          })
+        }
+      }
+
+      if (isLastDayOfMonth && lastMonthlySummaryPromptRef.current !== today) {
+        lastMonthlySummaryPromptRef.current = today
+        if (!readStoredSummary('month', today)) {
+          dispatch({
+            type: 'ADD_SYSTEM_MESSAGES',
+            messages: [
+              {
+                id: createId('summary-prompt'),
+                role: 'system',
+                type: 'summary-prompt',
+                summaryType: 'month',
+                text: '📊 这个月结束了，要看看本月总结吗？',
+              },
+            ],
+          })
+        }
+      }
+    }
+
+    checkPeriodicSummaryPrompt()
+    const intervalId = setInterval(checkPeriodicSummaryPrompt, 60000)
+    return () => clearInterval(intervalId)
+  }, [])
 
   useEffect(() => {
     function handleReminderTriggered(event) {
@@ -559,6 +677,58 @@ export function ChatProvider({ children }) {
     }
   }
 
+  async function generateChatSummary(type) {
+    dispatch({ type: 'SET_TYPING', value: true })
+    try {
+      const today = getTodayKey()
+      const label = type === 'month' ? '本月总结' : '本周总结'
+      const data =
+        type === 'month'
+          ? getMonthlySummaryData(today, record.records, todo.todos)
+          : getWeeklySummaryData(today, record.records, todo.todos)
+
+      let summary = readStoredSummary(type, today)
+      if (!summary) {
+        summary = await requestSummary(type, data)
+        saveStoredSummary(type, today, summary)
+      }
+
+      dispatch({
+        type: 'ADD_SYSTEM_MESSAGES',
+        messages: [
+          {
+            id: createId('summary'),
+            role: 'system',
+            type: 'summary',
+            summaryType: type,
+            summaryTitle: label,
+            summaryDate: today,
+            summaryId: `summary-card-${Date.now()}-${Math.random()
+              .toString(36)
+              .slice(2, 7)}`,
+            filename: label,
+            text: summary,
+          },
+        ],
+      })
+    } catch (error) {
+      dispatch({
+        type: 'ADD_SYSTEM_MESSAGES',
+        messages: [
+          {
+            id: createId('sys'),
+            role: 'system',
+            type: 'text',
+            error: true,
+            text: `总结生成失败：${error.message}`,
+          },
+        ],
+      })
+    } finally {
+      dispatch({ type: 'SET_TYPING', value: false })
+    }
+  }
+
   async function sendMessage(rawText) {
     const text = rawText.trim()
     if (!text || state.isTyping) {
@@ -572,6 +742,16 @@ export function ChatProvider({ children }) {
         text,
       },
     })
+
+    if (/(本周总结|这周怎么样|这周如何|本周复盘)/i.test(text)) {
+      await generateChatSummary('week')
+      return
+    }
+
+    if (/(本月总结|这个月怎么样|这个月如何|本月复盘)/i.test(text)) {
+      await generateChatSummary('month')
+      return
+    }
 
     if (/(建立|创建).*sop|整理一下每日流程|帮我整理.*流程/i.test(text)) {
       dispatch({
@@ -711,6 +891,7 @@ export function ChatProvider({ children }) {
       value={{
         ...state,
         sendMessage,
+        generateSummary: generateChatSummary,
         teachStyle,
         completeTask,
         setDraft,

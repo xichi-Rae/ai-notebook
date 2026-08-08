@@ -3,7 +3,7 @@
 本项目的生产构建产物在 `dist/`，已经包含：
 
 - 静态页面和 PWA 文件
-- `edge-functions/api/[[default]].js`，用于把 `/api/deepseek/*` 请求转发到 DeepSeek，且 API Key 只放在 EdgeOne 环境变量里
+- `edge-functions/api/deepseek.js`，用于把 `/api/deepseek` 请求转发到 DeepSeek，且 API Key 只放在 EdgeOne 环境变量里
 
 ## 打包
 

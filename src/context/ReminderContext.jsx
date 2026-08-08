@@ -12,6 +12,7 @@ const PRESET_REMINDERS = [
     title: '晨间启动',
     content: '开始今天的第一格行动',
     time: '08:00',
+    repeat: 'daily',
     weekdays: [],
     enabled: true,
   },
@@ -20,6 +21,7 @@ const PRESET_REMINDERS = [
     title: '查看群/官网',
     content: '有什么需要处理的吗？',
     time: '12:00',
+    repeat: 'daily',
     weekdays: [],
     enabled: true,
   },
@@ -28,6 +30,7 @@ const PRESET_REMINDERS = [
     title: '晚间复盘',
     content: '把今天写成一段冒险故事',
     time: '21:00',
+    repeat: 'daily',
     weekdays: [],
     enabled: true,
   },
@@ -36,6 +39,7 @@ const PRESET_REMINDERS = [
     title: '周日大扫除',
     content: '清理待办、文件和生活空间',
     time: '19:00',
+    repeat: 'weekly',
     weekdays: [0],
     enabled: true,
   },
@@ -45,18 +49,42 @@ function createReminderId() {
   return `reminder-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
 }
 
+function normalizeReminder(reminder) {
+  const weekdays = Array.isArray(reminder.weekdays) ? reminder.weekdays : []
+  let repeat = reminder.repeat
+  if (!repeat) {
+    repeat = weekdays.length ? 'weekly' : 'daily'
+  }
+  if (repeat === 'sunday') {
+    repeat = 'weekly'
+  }
+
+  return {
+    ...reminder,
+    weekdays,
+    repeat,
+    enabled: reminder.enabled !== false,
+    dayOfMonth:
+      repeat === 'monthly'
+        ? Number(reminder.dayOfMonth) || 1
+        : reminder.dayOfMonth || null,
+  }
+}
+
 function readReminders() {
   if (typeof window === 'undefined') {
-    return PRESET_REMINDERS
+    return PRESET_REMINDERS.map(normalizeReminder)
   }
 
   try {
     const parsed = JSON.parse(
       window.localStorage.getItem(REMINDER_STORAGE_KEY) || 'null',
     )
-    return Array.isArray(parsed) ? parsed : PRESET_REMINDERS
+    return Array.isArray(parsed)
+      ? parsed.map(normalizeReminder)
+      : PRESET_REMINDERS.map(normalizeReminder)
   } catch {
-    return PRESET_REMINDERS
+    return PRESET_REMINDERS.map(normalizeReminder)
   }
 }
 
@@ -119,17 +147,39 @@ export function ReminderProvider({ children }) {
     }
   }
 
-  function addReminder({ title, content = '', time, weekdays = [], enabled = true }) {
+  function addReminder({
+    title,
+    content = '',
+    time,
+    weekdays = [],
+    enabled = true,
+    repeat,
+    dayOfMonth,
+  }) {
     if (!title?.trim() || !time) {
       return null
     }
+
+    const normalizedRepeat =
+      repeat === 'sunday'
+        ? 'weekly'
+        : repeat || (weekdays.length ? 'weekly' : 'daily')
+    const normalizedWeekdays =
+      normalizedRepeat === 'weekly'
+        ? weekdays.length
+          ? weekdays
+          : [0]
+        : []
 
     const reminder = {
       id: createReminderId(),
       title: title.trim(),
       content: content.trim(),
       time,
-      weekdays,
+      repeat: normalizedRepeat,
+      weekdays: normalizedWeekdays,
+      dayOfMonth:
+        normalizedRepeat === 'monthly' ? Number(dayOfMonth) || 1 : null,
       enabled,
     }
     persistReminders([...reminders, reminder])
@@ -137,9 +187,41 @@ export function ReminderProvider({ children }) {
   }
 
   function updateReminder(id, patch) {
-    const nextReminders = reminders.map((reminder) =>
-      reminder.id === id ? { ...reminder, ...patch } : reminder,
-    )
+    const nextReminders = reminders.map((reminder) => {
+      if (reminder.id !== id) {
+        return reminder
+      }
+
+      const repeat =
+        patch.repeat === 'sunday'
+          ? 'weekly'
+          : patch.repeat ||
+            reminder.repeat ||
+            (reminder.weekdays?.length ? 'weekly' : 'daily')
+      let weekdays = Array.isArray(patch.weekdays)
+        ? patch.weekdays
+        : reminder.weekdays || []
+      let dayOfMonth = patch.dayOfMonth ?? reminder.dayOfMonth ?? 1
+
+      if (repeat === 'weekly' && !Array.isArray(patch.weekdays)) {
+        weekdays = reminder.weekdays?.length ? reminder.weekdays : [0]
+      }
+      if (repeat !== 'weekly') {
+        weekdays = []
+      }
+      if (repeat !== 'monthly') {
+        dayOfMonth = null
+      }
+
+      return {
+        ...reminder,
+        ...patch,
+        repeat,
+        weekdays,
+        dayOfMonth,
+        enabled: patch.enabled ?? reminder.enabled,
+      }
+    })
     persistReminders(nextReminders)
   }
 
@@ -214,6 +296,12 @@ export function ReminderProvider({ children }) {
         detail: reminder,
       }),
     )
+
+    if (reminder.repeat === 'once') {
+      window.setTimeout(() => {
+        updateReminder(reminder.id, { enabled: false })
+      }, 0)
+    }
   }
 
   useEffect(() => {
@@ -235,7 +323,17 @@ export function ReminderProvider({ children }) {
         if (!reminder.enabled || reminder.time !== minutes) {
           return
         }
-        if (reminder.weekdays?.length && !reminder.weekdays.includes(weekday)) {
+
+        const repeat =
+          reminder.repeat ||
+          (reminder.weekdays?.length ? 'weekly' : 'daily')
+        if (repeat === 'weekly' && !reminder.weekdays?.includes(weekday)) {
+          return
+        }
+        if (
+          repeat === 'monthly' &&
+          now.getDate() !== (reminder.dayOfMonth || 1)
+        ) {
           return
         }
 

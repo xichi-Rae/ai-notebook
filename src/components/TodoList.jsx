@@ -91,6 +91,7 @@ export default function TodoList() {
   const { goals, markGoalTask } = useGoal()
   const {
     todos,
+    isLoading,
     addTodo,
     toggleTodo,
     deleteTodo,
@@ -145,6 +146,10 @@ export default function TodoList() {
 
   function handleAddTodo(event) {
     event.preventDefault()
+    if (isLoading) {
+      return
+    }
+
     const title = draft.trim()
     if (!title) {
       return
@@ -155,6 +160,10 @@ export default function TodoList() {
   }
 
   function handleToggle(todo) {
+    if (isLoading) {
+      return
+    }
+
     toggleTodo(todo.id)
     if (todo.source === 'goal' && todo.goalTaskId) {
       markGoalTask(todo.goalId, todo.goalTaskId, !todo.completed)
@@ -296,11 +305,11 @@ export default function TodoList() {
               placeholder="添加一个手动待办..."
               className="min-h-12 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 text-base outline-none focus:border-emerald-400 focus:bg-white md:min-h-11 md:text-sm"
             />
-            <button
-              type="submit"
-              className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 text-base font-bold text-white transition hover:bg-emerald-700 disabled:opacity-50"
-              disabled={!draft.trim()}
-            >
+              <button
+                type="submit"
+                className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 text-base font-bold text-white transition hover:bg-emerald-700 disabled:opacity-50"
+                disabled={!draft.trim() || isLoading}
+              >
               <Plus size={16} />
               添加
             </button>
@@ -322,15 +331,16 @@ export default function TodoList() {
                     : 'border-slate-200 bg-slate-50'
                 }`}
               >
-                <button
-                  type="button"
-                  onClick={() => handleToggle(todo)}
-                  aria-label={todo.completed ? '标记为未完成' : '标记为完成'}
-                  className={`grid h-11 w-11 shrink-0 place-items-center rounded-full ${
-                    todo.completed
-                      ? 'text-emerald-600'
-                      : 'text-slate-400 hover:text-emerald-600'
-                  }`}
+                  <button
+                    type="button"
+                    onClick={() => handleToggle(todo)}
+                    disabled={isLoading}
+                    aria-label={todo.completed ? '标记为未完成' : '标记为完成'}
+                    className={`grid h-11 w-11 shrink-0 place-items-center rounded-full ${
+                      todo.completed
+                        ? 'text-emerald-600'
+                        : 'text-slate-400 hover:text-emerald-600'
+                    } disabled:opacity-50`}
                 >
                   {todo.completed ? (
                     <CheckCircle2 size={21} />
@@ -368,8 +378,9 @@ export default function TodoList() {
                 <button
                   type="button"
                   onClick={() => deleteTodo(todo.id)}
+                  disabled={isLoading}
                   aria-label="删除待办"
-                  className="grid h-11 w-11 shrink-0 place-items-center rounded-full text-slate-400 transition hover:bg-rose-50 hover:text-rose-600"
+                  className="grid h-11 w-11 shrink-0 place-items-center rounded-full text-slate-400 transition hover:bg-rose-50 hover:text-rose-600 disabled:opacity-50"
                 >
                   <Trash2 size={16} />
                 </button>

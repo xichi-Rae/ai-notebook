@@ -1,10 +1,12 @@
 const CACHE_NAME = 'ai-notebook-v1'
+const scriptPath = self.location.pathname.replace(/\/sw\.js$/, '')
+const BASE_PATH = `${scriptPath}/`
 const CORE_ASSETS = [
-  '/',
-  '/index.html',
-  '/manifest.json',
-  '/icons/icon-192.png',
-  '/icons/icon-512.png',
+  BASE_PATH,
+  `${BASE_PATH}index.html`,
+  `${BASE_PATH}manifest.json`,
+  `${BASE_PATH}icons/icon-192.png`,
+  `${BASE_PATH}icons/icon-512.png`,
 ]
 
 self.addEventListener('install', (event) => {
@@ -48,10 +50,12 @@ self.addEventListener('fetch', (event) => {
       fetch(request)
         .then((response) => {
           const copy = response.clone()
-          caches.open(CACHE_NAME).then((cache) => cache.put('/index.html', copy))
+          caches
+            .open(CACHE_NAME)
+            .then((cache) => cache.put(`${BASE_PATH}index.html`, copy))
           return response
         })
-        .catch(() => caches.match('/index.html')),
+        .catch(() => caches.match(`${BASE_PATH}index.html`)),
     )
     return
   }

@@ -100,7 +100,7 @@ export default function GoalKanban({ goalId }) {
     deleteTask,
     moveTask,
   } = useGoal()
-  const { todos, setTodoCompleted } = useTodo()
+  const { todos, isLoading, setTodoCompleted } = useTodo()
   const game = useGame()
   const goal = goals.find((item) => item.id === goalId)
 
@@ -146,6 +146,10 @@ export default function GoalKanban({ goalId }) {
   }
 
   function handleToggleTask(task) {
+    if (isLoading) {
+      return
+    }
+
     const nextCompleted = !task.completed
     if (nextCompleted) {
       game.addExp(10)
@@ -330,12 +334,13 @@ export default function GoalKanban({ goalId }) {
           <button
             type="button"
             onClick={() => handleToggleTask(task)}
+            disabled={isLoading}
             aria-label={task.completed ? '标记为未完成' : '标记为完成'}
             className={`mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-full ${
               task.completed
                 ? 'bg-emerald-500 text-white'
                 : 'text-slate-400 hover:text-emerald-600'
-            }`}
+            } disabled:opacity-50`}
           >
             {task.completed ? <Check size={16} /> : <Circle size={16} />}
           </button>

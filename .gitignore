@@ -1,6 +1,9 @@
 node_modules/
 dist/
 .env.local
+.env
+.env.*
+!.env.example
 *.local
 vite*.log
 .vercel/

@@ -2,6 +2,8 @@ import MeaningCard from './MeaningCard'
 import AIBubbleActions from './AIBubbleActions'
 import ReminderCard from './ReminderCard'
 import SopCard from './SopCard'
+import SummaryCard from './SummaryCard'
+import SummaryPromptCard from './SummaryPromptCard'
 import TaskCard from './TaskCard'
 import TeachReplyButton from './TeachReplyButton'
 import TextCard from './TextCard'
@@ -45,6 +47,24 @@ export default function MessageBubble({ message }) {
   }
 
   const safeMessage = sanitizeMessage(message)
+
+  if (safeMessage.type === 'system-notice') {
+    return (
+      <div className="flex justify-center px-4">
+        <span className="max-w-[92%] rounded-full bg-slate-200/90 px-3 py-2 text-center text-xs font-medium leading-5 text-slate-600 shadow-sm md:text-sm">
+          {safeMessage.text}
+        </span>
+      </div>
+    )
+  }
+
+  if (safeMessage.type === 'summary') {
+    return <SummaryCard message={safeMessage} />
+  }
+
+  if (safeMessage.type === 'summary-prompt') {
+    return <SummaryPromptCard message={safeMessage} />
+  }
 
   let card
   if (message.type === 'reminder') {

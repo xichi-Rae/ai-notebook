@@ -23,7 +23,7 @@ export default defineConfig(({ mode }) => {
   }
 
   return {
-    base: '/ai-notebook/',
+    base: env.VITE_BASE_URL || '/',
     plugins: [basicSsl(), react()],
     server: {
       host: '0.0.0.0',

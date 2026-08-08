@@ -116,6 +116,7 @@ export function RecordProvider({ children }) {
       value={{
         today,
         todayRecord,
+        records,
         updateToday,
         addDiet,
         addBill,

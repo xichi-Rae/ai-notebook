@@ -6,13 +6,16 @@
   "homepage": "https://xichi-Rae.github.io/ai-notebook",
   "scripts": {
     "dev": "vite --host 0.0.0.0 --port 5173 --strictPort",
-    "build": "vite build && node scripts/prepare-edgeone.mjs",
-    "build:edgeone": "vite build && node scripts/prepare-edgeone.mjs",
+    "build": "vite build --base=/ && node scripts/prepare-edgeone.mjs",
+    "build:edgeone": "vite build --base=/ && node scripts/prepare-edgeone.mjs",
+    "build:github": "vite build --base=/ai-notebook/ && node scripts/prepare-edgeone.mjs",
     "preview": "vite preview",
-    "predeploy": "npm run build",
+    "predeploy": "npm run build:github",
     "deploy": "gh-pages -d dist"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.112.2",
+    "html2canvas": "^1.4.1",
     "lucide-react": "^0.468.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
@@ -28,5 +31,12 @@
     "tailwindcss": "^3.4.17",
     "vercel": "^58.7.1",
     "vite": "^6.0.5"
+  },
+  "allowScripts": {
+    "esbuild@0.25.5": true,
+    "esbuild@0.27.0": true,
+    "esbuild@0.19.12": true,
+    "esbuild@0.27.7": true,
+    "esbuild@0.25.12": true
   }
 }

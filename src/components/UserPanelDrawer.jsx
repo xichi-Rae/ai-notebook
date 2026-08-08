@@ -1,7 +1,17 @@
-import { useRef, useState } from 'react'
-import { Bell, Download, Save, Sparkles, Trash2, X } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import {
+  Bell,
+  Download,
+  Pencil,
+  Plus,
+  Save,
+  Sparkles,
+  Trash2,
+  X,
+} from 'lucide-react'
 import { useReminder } from '../context/ReminderContext'
 import NotificationPermissionCard from './NotificationPermissionCard'
+import ReminderFormModal from './ReminderFormModal'
 
 const STYLE_KEY = 'executive-coach-style-learning'
 
@@ -14,11 +24,39 @@ function readStylePreferences() {
   }
 }
 
+function getRepeatLabel(reminder) {
+  if (reminder.repeat === 'weekly') {
+    return '每周日'
+  }
+  if (reminder.repeat === 'monthly') {
+    return `每月${reminder.dayOfMonth || 1}日`
+  }
+  if (reminder.repeat === 'once') {
+    return '不重复'
+  }
+  return '每天'
+}
+
 export default function UserPanelDrawer({ open, onClose }) {
-  const { reminders, toggleReminder, deleteReminder } = useReminder()
+  const {
+    reminders,
+    addReminder,
+    updateReminder,
+    toggleReminder,
+    deleteReminder,
+  } = useReminder()
   const [styleDraft, setStyleDraft] = useState(readStylePreferences)
   const [saved, setSaved] = useState(false)
+  const [reminderModalOpen, setReminderModalOpen] = useState(false)
+  const [editingReminder, setEditingReminder] = useState(null)
   const touchStartXRef = useRef(null)
+
+  useEffect(() => {
+    if (!open) {
+      setReminderModalOpen(false)
+      setEditingReminder(null)
+    }
+  }, [open])
 
   function handleSaveStyle() {
     const styles = styleDraft
@@ -53,6 +91,39 @@ export default function UserPanelDrawer({ open, onClose }) {
     link.download = 'executive-coach-data.json'
     link.click()
     URL.revokeObjectURL(url)
+  }
+
+  const sortedReminders = [...reminders].sort((a, b) =>
+    a.time.localeCompare(b.time),
+  )
+
+  function openAddReminder() {
+    setEditingReminder(null)
+    setReminderModalOpen(true)
+  }
+
+  function openEditReminder(reminder) {
+    setEditingReminder(reminder)
+    setReminderModalOpen(true)
+  }
+
+  function closeReminderModal() {
+    setReminderModalOpen(false)
+    setEditingReminder(null)
+  }
+
+  function handleSaveReminder(payload) {
+    if (editingReminder) {
+      updateReminder(editingReminder.id, payload)
+    } else {
+      addReminder(payload)
+    }
+    closeReminderModal()
+  }
+
+  function handleDeleteReminder(id) {
+    deleteReminder(id)
+    closeReminderModal()
   }
 
   function handleTouchStart(event) {
@@ -143,19 +214,29 @@ export default function UserPanelDrawer({ open, onClose }) {
           </section>
 
           <section>
-            <p className="flex items-center gap-2 text-base font-bold text-slate-800">
-              <Bell size={16} className="text-sky-600" />
-              我的提醒
-            </p>
+            <div className="flex items-center justify-between gap-2">
+              <p className="flex items-center gap-2 text-base font-bold text-slate-800">
+                <Bell size={16} className="text-sky-600" />
+                我的提醒
+              </p>
+              <button
+                type="button"
+                onClick={openAddReminder}
+                className="inline-flex min-h-11 items-center gap-1 rounded-xl bg-sky-600 px-3 text-sm font-bold text-white transition hover:bg-sky-700"
+              >
+                <Plus size={15} />
+                新增
+              </button>
+            </div>
 
             <div className="mt-2 space-y-2">
-              {reminders.length === 0 && (
+              {sortedReminders.length === 0 && (
                 <p className="rounded-xl border border-dashed border-slate-300 px-3 py-4 text-center text-sm text-slate-400">
                   还没有提醒。
                 </p>
               )}
 
-              {reminders.map((reminder) => (
+              {sortedReminders.map((reminder) => (
                 <div
                   key={reminder.id}
                   className="rounded-xl border border-slate-200 bg-slate-50 p-3"
@@ -165,22 +246,37 @@ export default function UserPanelDrawer({ open, onClose }) {
                       <p className="text-base font-bold text-slate-700">
                         {reminder.title}
                       </p>
+                      {reminder.content &&
+                        reminder.content !== reminder.title && (
+                          <p className="mt-0.5 text-sm text-slate-500">
+                            {reminder.content}
+                          </p>
+                        )}
                       <p className="mt-0.5 text-sm text-slate-400">
-                        {reminder.weekdays?.length ? '每周日' : '每天'}{' '}
-                        {reminder.time}
+                        {getRepeatLabel(reminder)} {reminder.time}
                       </p>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => toggleReminder(reminder.id)}
-                      className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-bold ${
-                        reminder.enabled
-                          ? 'bg-emerald-100 text-emerald-700'
-                          : 'bg-slate-200 text-slate-500'
-                      }`}
-                    >
-                      {reminder.enabled ? '启用' : '停用'}
-                    </button>
+                    <div className="flex shrink-0 items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => openEditReminder(reminder)}
+                        aria-label={`编辑 ${reminder.title}`}
+                        className="grid h-11 w-11 place-items-center rounded-full text-slate-400 transition hover:bg-sky-50 hover:text-sky-600"
+                      >
+                        <Pencil size={16} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => toggleReminder(reminder.id)}
+                        className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-bold ${
+                          reminder.enabled
+                            ? 'bg-emerald-100 text-emerald-700'
+                            : 'bg-slate-200 text-slate-500'
+                        }`}
+                      >
+                        {reminder.enabled ? '启用' : '停用'}
+                      </button>
+                    </div>
                   </div>
                   <button
                     type="button"
@@ -197,6 +293,14 @@ export default function UserPanelDrawer({ open, onClose }) {
           </section>
         </div>
       </aside>
+
+      <ReminderFormModal
+        open={reminderModalOpen}
+        reminder={editingReminder}
+        onClose={closeReminderModal}
+        onSave={handleSaveReminder}
+        onDelete={handleDeleteReminder}
+      />
     </>
   )
 }
