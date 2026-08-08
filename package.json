@@ -6,7 +6,7 @@
   "homepage": "https://xichi-Rae.github.io/ai-notebook",
   "scripts": {
     "dev": "vite --host 0.0.0.0 --port 5173 --strictPort",
-    "build": "vite build",
+    "build": "vite build && node scripts/prepare-edgeone.mjs",
     "build:edgeone": "vite build && node scripts/prepare-edgeone.mjs",
     "preview": "vite preview",
     "predeploy": "npm run build",
