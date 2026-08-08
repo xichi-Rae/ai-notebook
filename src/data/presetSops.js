@@ -1,0 +1,63 @@
+export const PRESET_SOPS = [
+  {
+    id: 'preset-fragment-info',
+    title: '碎片信息收集',
+    category: '日',
+    trigger_time: '10:00',
+    trigger_times: ['10:00', '15:00', '20:00'],
+    weekdays: [],
+    steps: [
+      { order: 1, action: '打开年级群，查看是否有新通知', duration: 2 },
+      { order: 2, action: '打开学校官网，查看最新公告', duration: 3 },
+      { order: 3, action: '打开科技前沿网站/公众号，浏览标题', duration: 5 },
+      {
+        order: 4,
+        action: '将需要处理的消息录入聊天框（AI 自动转为待办）',
+        duration: 5,
+      },
+    ],
+    active: true,
+    trial_days: 0,
+  },
+  {
+    id: 'preset-digital-cleanup',
+    title: '数字大扫除',
+    category: '周',
+    trigger_time: '19:00',
+    trigger_times: ['19:00'],
+    weekdays: [0],
+    steps: [
+      { order: 1, action: '清理电脑桌面文件（归类或删除）', duration: 10 },
+      {
+        order: 2,
+        action: '清理下载文件夹（删除不需要的安装包和临时文件）',
+        duration: 5,
+      },
+      {
+        order: 3,
+        action: '清理手机相册（删除截屏、重复照片）',
+        duration: 10,
+      },
+      { order: 4, action: '清空回收站', duration: 1 },
+    ],
+    active: true,
+    trial_days: 0,
+  },
+  {
+    id: 'preset-monthly-review',
+    title: '月度复盘与清理',
+    category: '月',
+    trigger_time: '20:00',
+    trigger_times: ['20:00'],
+    weekdays: [],
+    month_day: 1,
+    steps: [
+      { order: 1, action: '打开记账记录，回顾上月消费', duration: 5 },
+      { order: 2, action: '检查所有活跃目标的进度', duration: 5 },
+      { order: 3, action: '清理浏览器书签和收藏夹', duration: 5 },
+      { order: 4, action: '备份重要文件到云盘', duration: 10 },
+    ],
+    active: true,
+    trial_days: 0,
+  },
+]

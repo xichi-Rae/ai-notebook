@@ -1,0 +1,80 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  p,
+  h1,
+  h2,
+  h3,
+  span,
+  label,
+  button {
+    overflow-wrap: break-word;
+  }
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  height: 100dvh;
+}
+
+body {
+  margin: 0;
+  background: #dfe8e4;
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+    "Microsoft YaHei", sans-serif;
+  -webkit-text-size-adjust: 100%;
+}
+
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.fixed-bottom {
+  bottom: env(safe-area-inset-bottom, 0px);
+}
+
+@layer utilities {
+  .chat-scroll {
+    scrollbar-color: #b9c8c2 transparent;
+    scrollbar-width: thin;
+  }
+
+  .chat-scroll::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .chat-scroll::-webkit-scrollbar-thumb {
+    border-radius: 999px;
+    background: #b9c8c2;
+  }
+
+  .chat-scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
+
+@media (max-width: 640px) {
+  html {
+    font-size: 14px;
+  }
+
+  button {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  input,
+  select,
+  textarea {
+    min-height: 44px;
+  }
+
+  .pb-safe {
+    padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+  }
+}

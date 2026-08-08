@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.env.local
+*.local
+vite*.log
+.vercel/
+.pnpm-store/
+.edgeone-home/
+
+.vercel
