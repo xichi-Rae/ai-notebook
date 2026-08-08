@@ -1,7 +1,7 @@
 export const DEEPSEEK_MODEL = 'deepseek-v4-flash'
 
 export async function fetchDeepSeekReply(messages) {
-  const response = await fetch('/api/deepseek/v1/chat/completions', {
+  const response = await fetch('/api/deepseek', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

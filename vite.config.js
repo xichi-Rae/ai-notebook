@@ -9,7 +9,10 @@ export default defineConfig(({ mode }) => {
   const deepseekProxy = {
     target: 'https://api.deepseek.com',
     changeOrigin: true,
-    rewrite: (path) => path.replace(/^\/api\/deepseek/, ''),
+    rewrite: (path) => {
+      const rest = path.replace(/^\/api\/deepseek/, '')
+      return rest || '/v1/chat/completions'
+    },
     configure: (proxy) => {
       proxy.on('proxyReq', (proxyReq) => {
         if (deepseekApiKey && deepseekApiKey !== '你的密钥') {
