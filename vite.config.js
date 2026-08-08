@@ -20,6 +20,7 @@ export default defineConfig(({ mode }) => {
   }
 
   return {
+    base: '/ai-notebook/',
     plugins: [basicSsl(), react()],
     server: {
       host: '0.0.0.0',
