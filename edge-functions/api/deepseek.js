@@ -41,14 +41,17 @@ export async function onRequest(context) {
     },
   )
 
-  const text = await upstream.text()
+  const headers = new Headers()
+  headers.set(
+    'Content-Type',
+    upstream.headers.get('content-type') || 'application/json',
+  )
+  headers.set('Cache-Control', 'no-cache')
+  headers.set('Connection', 'keep-alive')
 
-  return new Response(text, {
+  return new Response(upstream.body, {
     status: upstream.status,
-    headers: {
-      'Content-Type':
-        upstream.headers.get('content-type') || 'application/json',
-    },
+    headers,
   })
 }
 

@@ -13,6 +13,7 @@ import {
 import { useGoal } from '../context/GoalContext'
 import { useTodo } from '../context/TodoContext'
 import { fetchDeepSeekReply, parseJsonObject } from '../services/deepseek'
+import { truncateText } from '../utils/text'
 import EditablePlanTree from './EditablePlanTree'
 
 const CATEGORIES = ['学习类', '执行类', '习惯类', '杂务类']
@@ -228,11 +229,15 @@ export default function GoalWizard({ open, onClose }) {
     setIsLoading(true)
     setError('')
 
+    const userInfo = truncateText(
+      `${buildQuestionnaireText()}\n达成原因：${truncateText(info.reason, 300)}`,
+      600,
+    )
     const prompt = `你是一个目标拆分专家。根据以下用户信息，将该目标拆分为一个三级学习计划：
 用户目标：${info.title}
 截止日期：${info.deadline || '未设置'}
 用户信息：
-${buildQuestionnaireText()}
+${userInfo}
 
 请返回严格符合以下格式的 JSON（不要包含其他文字）：
 {
