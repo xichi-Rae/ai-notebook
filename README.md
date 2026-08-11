@@ -18,21 +18,24 @@ pnpm dev
 ```env
 VITE_SUPABASE_URL=https://你的项目.supabase.co
 VITE_SUPABASE_ANON_KEY=你的匿名公钥
+VITE_DEEPSEEK_API_URL=https://你的腾讯云SCF函数公网地址
 DEEPSEEK_API_KEY=你的DeepSeek密钥
 ```
 
-`DEEPSEEK_API_KEY` 只用于 EdgeOne 边缘函数，不能直接在前端代码中读取。
+`DEEPSEEK_API_KEY` 只用于腾讯云 SCF，不能直接在前端代码中读取。
+`VITE_DEEPSEEK_API_URL` 是 SCF 云函数的公网地址；本地开发如果保留 Vite 代理，也可以不设置，让前端回退到 `/api/deepseek`。
 
-## EdgeOne Pages 部署
+## AI 后端部署（腾讯云 SCF）
 
-1. 构建命令：`npm run build`
-2. 输出目录：`dist`
-3. 环境变量：
-   - `VITE_SUPABASE_URL`
-   - `VITE_SUPABASE_ANON_KEY`
-   - `DEEPSEEK_API_KEY`
+完整代码和步骤见 `scf/deepseek/README.md`。核心步骤：
 
-`DEEPSEEK_API_KEY` 在 EdgeOne 环境变量中必须设置为“运行时”范围，这样 `edge-functions/api/deepseek.js` 才能读取。
+1. 在腾讯云 SCF 创建「Web 函数」，运行环境选择 `Nodejs 20.19`。
+2. 上传 `scf/deepseek/` 目录，入口文件为 `index.js`。
+3. 配置环境变量 `DEEPSEEK_API_KEY`。
+4. 把执行超时时间设置为 `60` 秒。
+5. 创建成功后复制「函数 URL」，填入项目 `.env` 的 `VITE_DEEPSEEK_API_URL`，再重新构建部署前端。
+
+函数已支持 SSE 流式透传和 CORS，前端读取 `Content-Type: text/event-stream` 时不会等完整响应结束后才解析。
 
 ## Supabase
 

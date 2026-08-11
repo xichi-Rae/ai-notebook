@@ -1,5 +1,8 @@
 # EdgeOne Pages 部署说明
 
+> 已弃用：AI 后端已迁移到腾讯云 SCF，完整说明见 `scf/deepseek/README.md`。
+> 本文件只作为历史部署记录保留。
+
 本项目的生产构建产物在 `dist/`，已经包含：
 
 - 静态页面和 PWA 文件

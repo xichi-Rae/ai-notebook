@@ -1,4 +1,7 @@
 export const DEEPSEEK_MODEL = 'deepseek-v4-flash'
+const DEEPSEEK_API_URL = (
+  import.meta.env.VITE_DEEPSEEK_API_URL || '/api/deepseek'
+).replace(/\/+$/, '')
 const REQUEST_TIMEOUT_MS = 9000
 
 async function readStreamContent(response) {
@@ -58,7 +61,7 @@ export async function fetchDeepSeekReply(messages, options = {}) {
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
 
   try {
-    const response = await fetch('/api/deepseek', {
+    const response = await fetch(DEEPSEEK_API_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
