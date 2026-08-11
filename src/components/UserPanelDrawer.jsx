@@ -4,12 +4,16 @@ import {
   Download,
   Pencil,
   Plus,
+  RefreshCw,
   Save,
   Sparkles,
   Trash2,
   X,
 } from 'lucide-react'
 import { useReminder } from '../context/ReminderContext'
+import { useGoal } from '../context/GoalContext'
+import { useRecord } from '../context/RecordContext'
+import { useTodo } from '../context/TodoContext'
 import NotificationPermissionCard from './NotificationPermissionCard'
 import ReminderFormModal from './ReminderFormModal'
 
@@ -45,8 +49,12 @@ export default function UserPanelDrawer({ open, onClose }) {
     toggleReminder,
     deleteReminder,
   } = useReminder()
+  const { syncGoals } = useGoal()
+  const { syncRecords } = useRecord()
+  const { syncTodos } = useTodo()
   const [styleDraft, setStyleDraft] = useState(readStylePreferences)
   const [saved, setSaved] = useState(false)
+  const [syncing, setSyncing] = useState(false)
   const [reminderModalOpen, setReminderModalOpen] = useState(false)
   const [editingReminder, setEditingReminder] = useState(null)
   const touchStartXRef = useRef(null)
@@ -70,6 +78,20 @@ export default function UserPanelDrawer({ open, onClose }) {
       window.setTimeout(() => setSaved(false), 1800)
     } catch {
       // Local storage can be unavailable in strict privacy modes.
+    }
+  }
+
+  async function handleManualSync() {
+    if (syncing) {
+      return
+    }
+
+    setSyncing(true)
+    try {
+      await Promise.all([syncGoals(), syncTodos(), syncRecords()])
+      window.setTimeout(() => setSyncing(false), 600)
+    } catch {
+      setSyncing(false)
     }
   }
 
@@ -203,6 +225,15 @@ export default function UserPanelDrawer({ open, onClose }) {
             <p className="mt-1 text-sm text-slate-500">
               导出本地保存的提醒、SOP、用户名等数据。
             </p>
+            <button
+              type="button"
+              onClick={handleManualSync}
+              disabled={syncing}
+              className="mt-2 inline-flex min-h-12 items-center gap-2 rounded-xl bg-sky-600 px-4 text-base font-bold text-white disabled:opacity-60"
+            >
+              <RefreshCw size={15} className={syncing ? 'animate-spin' : ''} />
+              {syncing ? '正在同步...' : '手动同步'}
+            </button>
             <button
               type="button"
               onClick={handleExport}

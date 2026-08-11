@@ -1,5 +1,5 @@
 export const DEEPSEEK_MODEL = 'deepseek-v4-flash'
-const REQUEST_TIMEOUT_MS = 15000
+const REQUEST_TIMEOUT_MS = 9000
 
 async function readStreamContent(response) {
   const reader = response.body?.getReader()
@@ -110,7 +110,7 @@ export async function fetchDeepSeekReply(messages, options = {}) {
     return content
   } catch (error) {
     if (error.name === 'AbortError' || controller.signal.aborted) {
-      throw new Error('AI 请求超时，请精简内容重试')
+      throw new Error('网络波动，请重试')
     }
     throw error
   } finally {

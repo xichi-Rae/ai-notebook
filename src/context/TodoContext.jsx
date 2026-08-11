@@ -445,6 +445,7 @@ export function TodoProvider({ children }) {
         todos,
         isLoading,
         error,
+        syncTodos: fetchTodos,
         addTodo,
         addTodos,
         toggleTodo,

@@ -1,4 +1,12 @@
-import { createContext, useContext, useState } from 'react'
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+} from 'react'
+import { isSupabaseConfigured, supabase } from '../lib/supabaseClient'
 
 const GoalContext = createContext(null)
 
@@ -6,10 +14,11 @@ function createId(prefix) {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 }
 
-function createNode(title, order) {
+function createNode(title, order, objective = '') {
   return {
     id: createId('node'),
     title,
+    objective,
     completed: false,
     order,
   }
@@ -19,6 +28,7 @@ function createPlanNode(phase, order) {
   return {
     id: phase.id || createId('node'),
     title: phase.title || `阶段 ${order}`,
+    objective: phase.objective || '',
     completed: false,
     order,
     plan: phase,
@@ -68,13 +78,96 @@ function recomputePlanProgress(phases) {
 
 export function GoalProvider({ children }) {
   const [goals, setGoals] = useState([])
+  const [isLoading, setIsLoading] = useState(true)
+  const hydratedRef = useRef(false)
+  const skipPersistRef = useRef(false)
+
+  const fetchGoals = useCallback(async () => {
+    if (!isSupabaseConfigured) {
+      setIsLoading(false)
+      return
+    }
+
+    setIsLoading(true)
+    try {
+      const { data, error } = await supabase
+        .from('goals')
+        .select('*')
+        .order('updated_at', { ascending: false })
+
+      if (error) {
+        throw error
+      }
+
+      skipPersistRef.current = true
+      setGoals(
+        (data || []).map((row) => ({
+          id: row.id,
+          title: row.title || '未命名目标',
+          category: row.category || '学习类',
+          deadline: row.deadline || '',
+          reason: row.reason || '',
+          ...(row.data || {}),
+        })),
+      )
+    } catch (error) {
+      console.error('Failed to load goals', error)
+    } finally {
+      setIsLoading(false)
+    }
+  }, [])
+
+  const persistGoals = useCallback(async (nextGoals) => {
+    if (!isSupabaseConfigured || !nextGoals.length) {
+      return
+    }
+
+    try {
+      await supabase.from('goals').upsert(
+        nextGoals.map((goal) => ({
+          id: goal.id,
+          title: goal.title,
+          category: goal.category,
+          deadline: goal.deadline || '',
+          reason: goal.reason || '',
+          data: goal,
+          updated_at: new Date().toISOString(),
+        })),
+        { onConflict: 'id' },
+      )
+    } catch (error) {
+      console.error('Failed to save goals', error)
+    }
+  }, [])
+
+  useEffect(() => {
+    async function initialize() {
+      await fetchGoals()
+      hydratedRef.current = true
+    }
+    initialize()
+  }, [fetchGoals])
+
+  useEffect(() => {
+    if (!hydratedRef.current) {
+      return
+    }
+    if (skipPersistRef.current) {
+      skipPersistRef.current = false
+      return
+    }
+    if (goals.length) {
+      persistGoals(goals)
+    }
+  }, [goals, persistGoals])
 
   function addGoal({
     title,
-    category = '执行类',
+    category = '学习类',
     deadline = '',
     reason = '',
     plan = null,
+    phases = null,
   } = {}) {
     const cleanTitle = title?.trim()
     if (!cleanTitle) {
@@ -83,7 +176,20 @@ export function GoalProvider({ children }) {
 
     const goalId = createId('goal')
     const safePlan = plan?.phases?.length ? withCompletedFlags(plan) : null
-    const nodes = safePlan?.phases?.length
+    const outlinePhases = Array.isArray(phases)
+      ? phases
+      : safePlan?.phases?.length
+        ? safePlan.phases
+        : []
+    const nodes = outlinePhases.length
+      ? outlinePhases.map((phase, index) =>
+          createNode(
+            phase.title || `阶段 ${index + 1}`,
+            index + 1,
+            phase.objective || phase.description || '',
+          ),
+        )
+      : safePlan?.phases?.length
       ? safePlan.phases.map((phase, index) => createPlanNode(phase, index + 1))
       : []
 
@@ -107,6 +213,40 @@ export function GoalProvider({ children }) {
     ])
 
     return goalId
+  }
+
+  function upsertPhasePlan(goalId, phasePlan) {
+    setGoals((currentGoals) =>
+      currentGoals.map((goal) => {
+        if (goal.id !== goalId) {
+          return goal
+        }
+
+        const currentPhases = goal.plan?.phases || []
+        const phaseIndex = currentPhases.findIndex(
+          (phase) => phase.id === phasePlan.id,
+        )
+        const nextPhases =
+          phaseIndex >= 0
+            ? currentPhases.map((phase, index) =>
+                index === phaseIndex
+                  ? { ...phase, ...phasePlan }
+                  : phase,
+              )
+            : [...currentPhases, phasePlan]
+        const plan = { phases: nextPhases }
+        const nodes = nextPhases.map((phase, index) =>
+          createPlanNode(phase, index + 1),
+        )
+
+        return {
+          ...goal,
+          plan,
+          nodes,
+          progress: recomputePlanProgress(nextPhases),
+        }
+      }),
+    )
   }
 
   function addNodesToGoal(goalId, nodes) {
@@ -182,6 +322,9 @@ export function GoalProvider({ children }) {
   }
 
   function deleteGoal(goalId) {
+    if (isSupabaseConfigured) {
+      supabase.from('goals').delete().eq('id', goalId).then()
+    }
     setGoals((currentGoals) =>
       currentGoals.filter((goal) => goal.id !== goalId),
     )
@@ -544,7 +687,10 @@ export function GoalProvider({ children }) {
     <GoalContext.Provider
       value={{
         goals,
+        isLoading,
+        syncGoals: fetchGoals,
         addGoal,
+        upsertPhasePlan,
         addNodesToGoal,
         toggleGoalNode,
         setGoalProgress,

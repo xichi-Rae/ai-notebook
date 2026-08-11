@@ -1,34 +1,55 @@
-# 执行教练聊天界面
+# AI 手帐本
 
-一个使用 React、Tailwind CSS 和 React Context 构建的模拟聊天界面。
+一个基于 React + Vite + Tailwind CSS 的 PWA 执行教练应用。
 
-## 启动
+## 本地运行
 
 ```bash
 pnpm install
 pnpm dev
 ```
 
-## 已实现交互
+浏览器访问 `http://localhost:5173`。
 
-- 接入 DeepSeek API，模型使用 `deepseek-v4-flash`。
-- 系统提示词内置执行猫角色设定。
-- 回复末尾带 `actionCard` JSON 时，自动渲染倒计时任务卡片。
-- 点击“标记完成”后更新经验值、金币，播放完成音效，并派发 `task:completed` 事件。
-- 支持目标地图、成就弹窗、今日记录三个模块。
+## 环境变量
 
-## 模块
+复制 `.env.example` 为 `.env`，并填入：
 
-- 聊天：`src/components/ChatWindow.jsx`、`src/components/InputBar.jsx`
-- 目标地图：`src/components/GoalMap.jsx`、`src/context/GoalContext.jsx`
-- 游戏化系统：`src/components/StatusBar.jsx`、`src/components/AchievementModal.jsx`、`src/context/GameContext.jsx`
-- 每日记录：`src/components/DailyStatus.jsx`、`src/context/RecordContext.jsx`
-- 视图切换：`src/components/TopNav.jsx`、`src/context/AppContext.jsx`
+```env
+VITE_SUPABASE_URL=https://你的项目.supabase.co
+VITE_SUPABASE_ANON_KEY=你的匿名公钥
+DEEPSEEK_API_KEY=你的DeepSeek密钥
+```
 
-## DeepSeek 配置
+`DEEPSEEK_API_KEY` 只用于 EdgeOne 边缘函数，不能直接在前端代码中读取。
 
-1. 打开 `.env.local`。
-2. 将 `VITE_DEEPSEEK_API_KEY=你的密钥` 替换为真实密钥。
-3. 重新启动开发服务器。
+## EdgeOne Pages 部署
 
-API Key 由 Vite 代理在服务端读取，不会打包进前端代码。
+1. 构建命令：`npm run build`
+2. 输出目录：`dist`
+3. 环境变量：
+   - `VITE_SUPABASE_URL`
+   - `VITE_SUPABASE_ANON_KEY`
+   - `DEEPSEEK_API_KEY`
+
+`DEEPSEEK_API_KEY` 在 EdgeOne 环境变量中必须设置为“运行时”范围，这样 `edge-functions/api/deepseek.js` 才能读取。
+
+## Supabase
+
+执行：
+
+```sql
+supabase/migrations/001_create_tasks.sql
+supabase/migrations/002_create_sync_tables.sql
+```
+
+任务和目标的写入以 Supabase 为准，本地 Context 作为 UI 状态和缓存。
+
+## AI 目标拆分
+
+采用两段式：
+
+1. 创建目标时只生成阶段大纲。
+2. 在目标详情页逐阶段点击“生成详细计划”，再生成周任务和每日行动。
+
+所有 DeepSeek 请求统一走 `src/services/deepseek.js`，带 9 秒超时和流式响应。

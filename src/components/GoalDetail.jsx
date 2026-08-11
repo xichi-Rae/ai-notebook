@@ -172,6 +172,7 @@ export default function GoalDetail({ goalId, onBack }) {
     goals,
     updateGoalDeadline,
     replaceGoalPlan,
+    upsertPhasePlan,
     saveLearningRecord,
     addMasteredConcepts,
     incrementGoalProgress,
@@ -186,6 +187,7 @@ export default function GoalDetail({ goalId, onBack }) {
   const [dateOptions, setDateOptions] = useState(null)
   const [planDraft, setPlanDraft] = useState(null)
   const [isReplanning, setIsReplanning] = useState(false)
+  const [expandingPhaseId, setExpandingPhaseId] = useState(null)
   const [toast, setToast] = useState('')
   const [tutorMessages, setTutorMessages] = useState(() => [
     {
@@ -215,6 +217,77 @@ export default function GoalDetail({ goalId, onBack }) {
   function showToast(message) {
     setToast(message)
     window.setTimeout(() => setToast(''), 2600)
+  }
+
+  async function generatePhasePlan(phase) {
+    if (expandingPhaseId) {
+      return
+    }
+
+    setExpandingPhaseId(phase.id)
+    const prompt = `你是目标拆分专家。请为以下阶段生成详细计划：
+阶段：${phase.title}
+阶段目标：${phase.objective || '未填写'}
+所属目标：${goal.title}
+
+请返回严格 JSON（不要包含其他文字）：
+{"weeks":[{"week":1,"tasks":[{"day":1,"date":"YYYY-MM-DD","action":"具体可执行行动","est_minutes":30}]}]}
+
+强制要求：
+1. 返回 2-6 周。
+2. 每周 3-5 个任务。
+3. 每个任务必须包含 date、action、est_minutes。
+4. 行动必须是今天打开就能做的原子动作。`
+
+    try {
+      const content = await fetchDeepSeekReply(
+        [
+          {
+            role: 'system',
+            content:
+              '你是目标拆分专家。只返回合法 JSON，不要输出解释、Markdown 或代码块。',
+          },
+          {
+            role: 'user',
+            content: prompt,
+          },
+        ],
+        { timeoutMs: 9000 },
+      )
+      const parsed = parseJsonObject(content)
+      const weeks = parsed?.weeks || parsed?.phases?.[0]?.weeks
+
+      if (!Array.isArray(weeks) || !weeks.length) {
+        throw new Error('AI 没有返回有效的周任务')
+      }
+
+      const normalizedWeeks = weeks.map((week, weekIndex) => ({
+        id: week.id || createId('week'),
+        week: Number(week.week) || weekIndex + 1,
+        tasks: Array.isArray(week.tasks)
+          ? week.tasks.map((task, taskIndex) => ({
+              id: task.id || createId('task'),
+              day: Number(task.day) || taskIndex + 1,
+              date: task.date || '',
+              action: task.action || '',
+              estMinutes:
+                Number(task.est_minutes ?? task.estMinutes) || 30,
+            }))
+          : [],
+      }))
+
+      upsertPhasePlan(goal.id, {
+        id: phase.id,
+        title: phase.title,
+        objective: phase.objective || '',
+        weeks: normalizedWeeks,
+      })
+      showToast('阶段详细计划已生成')
+    } catch (error) {
+      showToast(`生成失败：${error.message}`)
+    } finally {
+      setExpandingPhaseId(null)
+    }
   }
 
   function openDatePicker() {
@@ -367,6 +440,81 @@ ${taskSummary}
     }
   }
 
+  function renderPhaseCards() {
+    const phases = goal.nodes?.length ? goal.nodes : goal.plan?.phases || []
+
+    if (!phases.length) {
+      return null
+    }
+
+    return (
+      <div className="rounded-2xl border border-white bg-white p-4 shadow-sm md:p-5">
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-base font-bold text-slate-800">阶段大纲</p>
+          <span className="rounded-full bg-sky-100 px-2.5 py-1 text-xs font-bold text-sky-700">
+            {phases.length} 个阶段
+          </span>
+        </div>
+
+        <div className="mt-3 space-y-2">
+          {phases.map((phase, index) => {
+            const phasePlan = goal.plan?.phases?.find(
+              (item) => item.id === phase.id,
+            )
+            const hasDetail = phasePlan?.weeks?.length
+            const isExpanding = expandingPhaseId === phase.id
+
+            return (
+              <div
+                key={phase.id}
+                className="rounded-xl border border-sky-100 bg-sky-50/60 p-3"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-base font-bold text-slate-800">
+                      {index + 1}. {phase.title}
+                    </p>
+                    {phase.objective && (
+                      <p className="mt-1 text-sm text-slate-500">
+                        {phase.objective}
+                      </p>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (hasDetail) {
+                        document
+                          .getElementById('goal-kanban')
+                          ?.scrollIntoView({
+                            behavior: 'smooth',
+                            block: 'start',
+                          })
+                        return
+                      }
+                      generatePhasePlan(phase)
+                    }}
+                    disabled={isExpanding}
+                    className={`inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-xl px-3 text-sm font-bold ${
+                      hasDetail
+                        ? 'bg-emerald-100 text-emerald-700'
+                        : 'bg-sky-600 text-white hover:bg-sky-700'
+                    } disabled:cursor-not-allowed disabled:opacity-60`}
+                  >
+                    {isExpanding ? (
+                      <Loader2 size={15} className="animate-spin" />
+                    ) : null}
+                    {hasDetail ? '查看详细计划' : '生成详细计划'}
+                  </button>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    )
+  }
+
   function renderOverview() {
     const oldDays = getDaysUntil(dateOptions?.oldDeadline || goal.deadline)
     const newDays = getDaysUntil(dateOptions?.newDeadline)
@@ -479,9 +627,16 @@ ${taskSummary}
           )}
         </div>
 
-        <div className="rounded-2xl border border-white bg-white p-4 shadow-sm md:p-5">
-          <GoalKanban goalId={goal.id} />
-        </div>
+        {renderPhaseCards()}
+
+        {goal.plan?.phases?.some((phase) => phase.weeks?.length) && (
+          <div
+            id="goal-kanban"
+            className="rounded-2xl border border-white bg-white p-4 shadow-sm md:p-5"
+          >
+            <GoalKanban goalId={goal.id} />
+          </div>
+        )}
 
         {(goal.masteredConcepts?.length > 0 ||
           goal.learningRecords?.length > 0) && (

@@ -104,33 +104,6 @@ function createEmptyPlan() {
   }
 }
 
-function normalizePlan(parsed) {
-  const phases = Array.isArray(parsed?.phases)
-    ? parsed.phases.map((phase, phaseIndex) => ({
-        id: phase.id || createId('phase'),
-        title: phase.title || `阶段 ${phaseIndex + 1}`,
-        weeks: Array.isArray(phase.weeks)
-          ? phase.weeks.map((week, weekIndex) => ({
-              id: week.id || createId('week'),
-              week: Number(week.week) || weekIndex + 1,
-              tasks: Array.isArray(week.tasks)
-                ? week.tasks.map((task, taskIndex) => ({
-                    id: task.id || createId('task'),
-                    day: Number(task.day) || taskIndex + 1,
-                    action: task.action || '',
-                    estMinutes:
-                      Number(task.est_minutes ?? task.estMinutes) || 30,
-                    date: task.date || '',
-                  }))
-                : [],
-            }))
-          : [],
-      }))
-    : []
-
-  return { phases }
-}
-
 function flattenPlanToTodos(goalId, goalTitle, plan) {
   const todos = []
   const today = getTodayKey()
@@ -174,6 +147,7 @@ export default function GoalWizard({ open, onClose }) {
     reason: '',
   })
   const [plan, setPlan] = useState(createEmptyPlan)
+  const [outlinePhases, setOutlinePhases] = useState([])
   const [answers, setAnswers] = useState({
     familiarity: '',
     dailyMinutes: '',
@@ -205,6 +179,7 @@ export default function GoalWizard({ open, onClose }) {
 
     if (nextMode === 'manual') {
       setPlan(createEmptyPlan())
+      setOutlinePhases([])
       setStep(3)
     } else {
       setSurveyPage(0)
@@ -233,33 +208,19 @@ export default function GoalWizard({ open, onClose }) {
       `${buildQuestionnaireText()}\n达成原因：${truncateText(info.reason, 300)}`,
       600,
     )
-    const prompt = `你是一个目标拆分专家。根据以下用户信息，将该目标拆分为一个三级学习计划：
+    const prompt = `你是一个目标拆分专家。根据以下用户信息，为该目标生成一份精简的阶段大纲：
 用户目标：${info.title}
 截止日期：${info.deadline || '未设置'}
 用户信息：
 ${userInfo}
 
-请返回严格符合以下格式的 JSON（不要包含其他文字）：
-{
-  "phases": [
-    {
-      "title": "阶段名称",
-      "weeks": [
-        {
-          "week": 1,
-          "tasks": [
-            { "day": 1, "date": "YYYY-MM-DD", "action": "具体可执行行动", "est_minutes": 30 }
-          ]
-        }
-      ]
-    }
-  ]
-}
+请只返回一个精简 JSON 数组，不要返回其他文字，不要展开任何周任务或每日行动：
+[{"title":"阶段名称","objective":"该阶段的一句话目标"}]
+
 强制要求：
-1. 每个 task 必须包含 "date" 字段，值为具体的日期（YYYY-MM-DD 格式），从目标开始日期起按天递增。
-2. 同一天的任务数量不能超过 5 个。
-3. 每个任务的 est_minutes 必须在 15-90 分钟之间。
-4. 任务必须是“今天打开就能做”的原子动作，不能是“学习第三章”这种模糊描述。`
+1. 返回 3-6 个阶段。
+2. 每个阶段 objective 必须是一句话。
+3. 整个回复必须在 200 字内完成。`
 
     try {
       const content = await fetchDeepSeekReply([
@@ -274,12 +235,22 @@ ${userInfo}
         },
       ])
       const parsed = parseJsonObject(content)
+      const parsedPhases = Array.isArray(parsed)
+        ? parsed
+        : parsed?.phases || []
 
-      if (!parsed?.phases?.length) {
-        throw new Error('AI 没有返回有效的阶段计划')
+      if (!parsedPhases.length) {
+        throw new Error('AI 没有返回有效的阶段大纲')
       }
 
-      setPlan(normalizePlan(parsed))
+      setOutlinePhases(
+        parsedPhases.map((phase, index) => ({
+          id: phase.id || createId('phase'),
+          title: phase.title || `阶段 ${index + 1}`,
+          objective: phase.objective || phase.description || '',
+        })),
+      )
+      setPlan(createEmptyPlan())
       setStep(4)
     } catch (requestError) {
       setError(`AI 拆分失败：${requestError.message}`)
@@ -294,14 +265,17 @@ ${userInfo}
       category: info.category,
       deadline: info.deadline,
       reason: info.reason,
-      plan,
+      plan: mode === 'ai' ? null : plan,
+      phases: mode === 'ai' ? outlinePhases : null,
     })
 
     if (!goalId) {
       return
     }
 
-    addTodos(flattenPlanToTodos(goalId, info.title, plan))
+    if (mode !== 'ai' && plan?.phases?.length) {
+      addTodos(flattenPlanToTodos(goalId, info.title, plan))
+    }
     onClose()
   }
 
@@ -623,7 +597,57 @@ ${userInfo}
     )
   }
 
+  function renderOutlinePreview() {
+    return (
+      <div className="space-y-4">
+        <p className="text-sm font-bold text-slate-700">
+          AI 已生成阶段大纲，详细计划将在目标详情页逐阶段生成。
+        </p>
+
+        <div className="space-y-2">
+          {outlinePhases.map((phase, index) => (
+            <div
+              key={phase.id}
+              className="rounded-xl border border-sky-100 bg-sky-50/60 p-3"
+            >
+              <p className="text-base font-bold text-slate-800">
+                {index + 1}. {phase.title}
+              </p>
+              {phase.objective && (
+                <p className="mt-1 text-sm text-slate-500">{phase.objective}</p>
+              )}
+            </div>
+          ))}
+        </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <button
+            type="button"
+            onClick={() => setSurveyPage(QUESTION_PAGES.length - 1)}
+            className="inline-flex min-h-12 items-center gap-2 rounded-xl px-3 text-base font-semibold text-slate-500 transition hover:bg-slate-100"
+          >
+            <ArrowLeft size={16} />
+            上一步
+          </button>
+
+          <button
+            type="button"
+            onClick={confirmCreate}
+            className="inline-flex min-h-12 items-center gap-2 rounded-xl bg-emerald-600 px-5 text-base font-bold text-white transition hover:bg-emerald-700"
+          >
+            <Check size={16} />
+            确认创建
+          </button>
+        </div>
+      </div>
+    )
+  }
+
   function renderPlanEditor() {
+    if (mode === 'ai' && outlinePhases.length) {
+      return renderOutlinePreview()
+    }
+
     return (
       <div className="space-y-4">
         {error && (

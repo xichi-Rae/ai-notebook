@@ -1,4 +1,12 @@
-import { createContext, useContext, useState } from 'react'
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+} from 'react'
+import { isSupabaseConfigured, supabase } from '../lib/supabaseClient'
 
 const RecordContext = createContext(null)
 
@@ -25,6 +33,87 @@ export function RecordProvider({ children }) {
   const [records, setRecords] = useState({
     [today]: createEmptyRecord(today),
   })
+  const [isLoading, setIsLoading] = useState(true)
+  const hydratedRef = useRef(false)
+  const skipPersistRef = useRef(false)
+
+  const fetchRecords = useCallback(async () => {
+    if (!isSupabaseConfigured) {
+      setIsLoading(false)
+      return
+    }
+
+    setIsLoading(true)
+    try {
+      const { data, error } = await supabase
+        .from('records')
+        .select('*')
+        .order('record_date', { ascending: false })
+
+      if (error) {
+        throw error
+      }
+
+      const remoteRecords = {}
+      ;(data || []).forEach((row) => {
+        remoteRecords[row.record_date] = {
+          ...createEmptyRecord(row.record_date),
+          ...(row.data || {}),
+          date: row.record_date,
+        }
+      })
+      if (!remoteRecords[today]) {
+        remoteRecords[today] = createEmptyRecord(today)
+      }
+
+      skipPersistRef.current = true
+      setRecords(remoteRecords)
+    } catch (error) {
+      console.error('Failed to load records', error)
+    } finally {
+      setIsLoading(false)
+    }
+  }, [today])
+
+  const persistRecords = useCallback(
+    async (nextRecords) => {
+      if (!isSupabaseConfigured) {
+        return
+      }
+
+      try {
+        await supabase.from('records').upsert(
+          Object.entries(nextRecords).map(([date, record]) => ({
+            record_date: date,
+            data: record,
+          })),
+          { onConflict: 'record_date' },
+        )
+      } catch (error) {
+        console.error('Failed to save records', error)
+      }
+    },
+    [],
+  )
+
+  useEffect(() => {
+    async function initialize() {
+      await fetchRecords()
+      hydratedRef.current = true
+    }
+    initialize()
+  }, [fetchRecords])
+
+  useEffect(() => {
+    if (!hydratedRef.current) {
+      return
+    }
+    if (skipPersistRef.current) {
+      skipPersistRef.current = false
+      return
+    }
+    persistRecords(records)
+  }, [persistRecords, records])
 
   const todayRecord = records[today] || createEmptyRecord(today)
 
@@ -117,6 +206,8 @@ export function RecordProvider({ children }) {
         today,
         todayRecord,
         records,
+        isLoading,
+        syncRecords: fetchRecords,
         updateToday,
         addDiet,
         addBill,

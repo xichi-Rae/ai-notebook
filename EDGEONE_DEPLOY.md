@@ -21,6 +21,7 @@ pnpm run build:edgeone
 4. 部署成功后，在项目设置里添加环境变量：
    - 变量名：`DEEPSEEK_API_KEY`
    - 变量值：你的 DeepSeek API Key
+   - 作用范围：必须勾选“运行时”
 5. 保存并重新部署一次，使环境变量生效。
 
 ## 用 EdgeOne CLI 部署
